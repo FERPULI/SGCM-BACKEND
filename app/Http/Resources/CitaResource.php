@@ -10,20 +10,30 @@ class CitaResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            // --- DATOS ORIGINALES ---
             'id' => $this->id,
-            'fecha_hora_inicio' => $this->fecha_hora_inicio, // <-- Corresponde a tu SQL
-            'fecha_hora_fin' => $this->fecha_hora_fin,       // <-- Corresponde a tu SQL
+            'fecha_hora_inicio' => $this->fecha_hora_inicio,
+            'fecha_hora_fin' => $this->fecha_hora_fin,
             'estado' => $this->estado,
             'motivo_consulta' => $this->motivo_consulta,
-            'notas_paciente' => $this->notas_paciente,     // <-- Corresponde a tu SQL
+            'notas_paciente' => $this->notas_paciente,
             
+            // --- RELACIONES ORIGINALES ---
             'paciente' => [
-                'id' => $this->whenLoaded('paciente', $this->paciente->id),
-                'nombre_completo' => $this->whenLoaded('paciente', $this->paciente->user->nombre_completo ?? null),
+                'id' => $this->paciente?->id,
+                'nombre_completo' => $this->paciente?->user?->nombre_completo ?? 'N/A',
             ],
+            
             'medico' => [
-                'id' => $this->whenLoaded('medico', $this->medico->id),
-                'nombre_completo' => $this->whenLoaded('medico', $this->medico->user->nombre_completo ?? null),
+                'id' => $this->medico?->id,
+                'nombre_completo' => $this->medico?->user?->nombre_completo ?? 'N/A',
+                
+                // --- NUEVO: Especialidad ---
+                // Agregamos esto para que el dashboard pueda mostrar "Cardiología"
+                'especialidad' => [
+                    'id' => $this->medico?->especialidad?->id ?? null,
+                    'nombre' => $this->medico?->especialidad?->nombre ?? 'Sin asignar',
+                ]
             ],
         ];
     }
