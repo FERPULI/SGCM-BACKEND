@@ -15,7 +15,7 @@ use Illuminate\Validation\Rule;
 class CitaController extends Controller
 {
     /**
-     * Muestra una lista de las citas, filtrada por rol.
+     * Muestra una lista de las citas, filtrada por rol, estado y FECHA.
      */
     public function index(Request $request)
     {
@@ -23,19 +23,26 @@ class CitaController extends Controller
 
         $user = Auth::user();
         
-        // --- CAMBIO: Agregamos 'medico.especialidad' ---
+        // Cargamos relaciones (incluyendo especialidad para el frontend)
         $query = Cita::with(['paciente.user', 'medico.user', 'medico.especialidad']);
 
-        // --- LÓGICA ORIGINAL: Filtros de Rol ---
+        // --- 1. Filtro por ROL ---
         if ($user->hasRole('paciente')) {
             $query->where('paciente_id', $user->paciente->id);
         } elseif ($user->hasRole('medico')) {
             $query->where('medico_id', $user->medico->id);
         }
 
-        // --- LÓGICA ORIGINAL: Filtros de Estado ---
+        // --- 2. NUEVO: Filtro por FECHA (Agenda de Hoy) ---
+        // El frontend envía: /api/citas?fecha=2025-11-28
+        if ($request->has('fecha')) {
+            $query->whereDate('fecha_hora_inicio', $request->get('fecha'));
+        }
+
+        // --- 3. Filtro por ESTADO ---
         if ($request->has('estado')) {
             $estado = $request->get('estado');
+            
             if ($estado === 'pendientes') {
                 $query->where('estado', 'programada');
             } elseif ($estado === 'activas') {
@@ -45,6 +52,13 @@ class CitaController extends Controller
             }
         }
 
+        // --- RESPUESTA ---
+        // Si nos piden una fecha específica (Agenda), devolvemos todo sin paginar ordenado por hora
+        if ($request->has('fecha')) {
+             return CitaResource::collection($query->orderBy('fecha_hora_inicio', 'asc')->get());
+        }
+
+        // Si es listado general, paginamos
         $citas = $query->orderBy('fecha_hora_inicio', 'desc')->paginate(10);
         
         return CitaResource::collection($citas);
@@ -60,12 +74,10 @@ class CitaController extends Controller
         $datosValidados = $request->validated();
         $user = Auth::user();
 
-        // --- LÓGICA ORIGINAL: Forzar paciente ---
         if ($user->hasRole('paciente')) {
             $datosValidados['paciente_id'] = $user->paciente->id;
         }
         
-        // --- LÓGICA ORIGINAL: Calcular hora fin ---
         if (!isset($datosValidados['fecha_hora_fin'])) {
              $inicio = \Carbon\Carbon::parse($datosValidados['fecha_hora_inicio']);
              $datosValidados['fecha_hora_fin'] = $inicio->addMinutes(30)->format('Y-m-d H:i:s');
@@ -74,8 +86,6 @@ class CitaController extends Controller
         $datosValidados['estado'] = 'programada';
         
         $cita = Cita::create($datosValidados);
-        
-        // --- CAMBIO: Cargar especialidad al responder ---
         $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
 
         return (new CitaResource($cita))
@@ -90,9 +100,7 @@ class CitaController extends Controller
     {
         Gate::authorize('view', $cita);
         
-        // --- CAMBIO: Cargar especialidad al ver detalle ---
         $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
-        
         return new CitaResource($cita);
     }
 
@@ -103,21 +111,17 @@ class CitaController extends Controller
     {
         Gate::authorize('update', $cita);
 
-        // --- LÓGICA ORIGINAL: Protección de estado ---
         if (in_array($cita->estado, ['cancelada', 'completada'])) {
              return response()->json(['message' => 'No se puede editar una cita finalizada o cancelada.'], 409);
         }
 
         $datos = $request->validated();
         
-        // --- LÓGICA ORIGINAL: Resetear a 'programada' si cambia fecha ---
         if (isset($datos['fecha_hora_inicio'])) {
              $datos['estado'] = 'programada';
         }
 
         $cita->update($datos);
-        
-        // --- CAMBIO: Cargar especialidad al responder ---
         $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
         
         return new CitaResource($cita);
@@ -130,14 +134,11 @@ class CitaController extends Controller
     {
         Gate::authorize('delete', $cita);
         
-        // --- LÓGICA ORIGINAL: Protección de estado ---
         if ($cita->estado == 'completada') {
              return response()->json(['message' => 'No se puede cancelar una cita que ya ha finalizado.'], 409);
         }
 
         $cita->update(['estado' => 'cancelada']);
-        
-        // --- CAMBIO: Cargar especialidad al responder ---
         $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
         
         return new CitaResource($cita);

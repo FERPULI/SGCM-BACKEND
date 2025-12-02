@@ -11,6 +11,7 @@ use App\Http\Controllers\API\MedicoController;
 use App\Http\Controllers\API\PacienteDashboardController;
 use App\Http\Controllers\API\DisponibilidadController;
 use App\Http\Controllers\API\HistorialMedicoController;
+use App\Http\Controllers\API\HorarioController;
 
 Route::post('auth/login', [AuthController::class,'login']);
 Route::post('auth/register', [AuthController::class,'register']);
@@ -54,4 +55,9 @@ Route::post('medico/finalizar-consulta', [HistorialMedicoController::class, 'sto
         // --- 2. AÑADIR RUTA PARA EL DIRECTORIO DE MÉDICOS ---
         Route::get('medicos-directorio', [MedicoController::class, 'index']);
         // });
+
+        Route::get('medico/horarios', [HorarioController::class, 'index']);
+        Route::post('medico/horarios', [HorarioController::class, 'store']);
+        Route::get('medico/pacientes', [MedicoController::class, 'misPacientes']);
+        Route::get('medico/stats', [MedicoController::class, 'dashboardStats']);
 });
