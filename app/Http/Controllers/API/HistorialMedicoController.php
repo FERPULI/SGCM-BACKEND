@@ -37,51 +37,51 @@ class HistorialMedicoController extends Controller
      * Guarda un diagnóstico y finaliza la cita.
      * (Solo Médicos)
      */
-    public function store(Request $request)
+   public function store(Request $request)
     {
+        // 1. Validar los campos del mockup
         $request->validate([
             'cita_id' => 'required|exists:citas,id',
             'diagnostico' => 'required|string',
             'tratamiento' => 'required|string',
-            'notas_medicas' => 'nullable|string',
+            'recetas' => 'nullable|string',              // <-- Nuevo
+            'notas_privadas_medico' => 'nullable|string' // <-- Nuevo
         ]);
 
         $user = Auth::user();
         
-        // Verificar que sea médico
+        // Validaciones de seguridad (Rol y Pertenencia)
         if (!$user->hasRole('medico')) {
-            return response()->json(['message' => 'Solo los médicos pueden crear historiales.'], 403);
+            return response()->json(['message' => 'Solo médicos.'], 403);
         }
-
-        // Verificar que la cita pertenezca a este médico
         $cita = Cita::findOrFail($request->cita_id);
         if ($cita->medico_id !== $user->medico->id) {
-            return response()->json(['message' => 'No puedes atender la cita de otro médico.'], 403);
+            return response()->json(['message' => 'No es tu cita.'], 403);
         }
-
-        // Verificar que la cita no esté ya completada o cancelada
-        if ($cita->estado === 'completada' || $cita->estado === 'cancelada') {
-            return response()->json(['message' => 'Esta cita ya ha sido finalizada.'], 409);
+        if ($cita->estado === 'completada') {
+            return response()->json(['message' => 'Cita ya finalizada.'], 409);
         }
 
         try {
-            DB::transaction(function () use ($request, $cita) {
-                // 1. Crear el Historial
+            DB::transaction(function () use ($request, $cita, $user) {
+                // 2. Crear Historial con TODOS los campos
                 HistorialMedico::create([
                     'cita_id' => $request->cita_id,
+                    'paciente_id' => $cita->paciente_id, // <-- Importante llenar esto
+                    'medico_id' => $user->medico->id,    // <-- Importante llenar esto
                     'diagnostico' => $request->diagnostico,
                     'tratamiento' => $request->tratamiento,
-                    'notas_medicas' => $request->notas_medicas,
+                    'recetas' => $request->recetas,
+                    'notas_privadas_medico' => $request->notas_privadas_medico,
                 ]);
 
-                // 2. Actualizar estado de la Cita a COMPLETADA
+                // 3. Cerrar Cita
                 $cita->update(['estado' => 'completada']);
             });
 
-            return response()->json(['message' => 'Consulta finalizada y historial guardado.'], 201);
+            return response()->json(['message' => 'Consulta guardada con éxito.'], 201);
 
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al guardar historial', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Error', 'error' => $e->getMessage()], 500);
         }
-    }
-}
+    }}
