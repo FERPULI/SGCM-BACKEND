@@ -15,23 +15,21 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            // --- Datos del Usuario (Tabla Users) ---
             'id' => $this->id,
             'nombre' => $this->nombre,
             'apellidos' => $this->apellidos,
-            'nombre_completo' => $this->nombre_completo, // (Asumo que tienes un accesor para esto)
+            // Usamos trim para asegurar que no queden espacios vacíos
+            'nombre_completo' => trim($this->nombre . ' ' . $this->apellidos),
             'email' => $this->email,
             'rol' => $this->rol,
-            'activo' => $this->activo,
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
+            'activo' => (bool) $this->activo,
+            'created_at' => optional($this->created_at)->toDateTimeString(),
+            'updated_at' => optional($this->updated_at)->toDateTimeString(),
 
-            // --- AÑADIDO: Perfil de Paciente ---
-            // Usa PacienteResource si la relación 'paciente' está cargada
+            // --- RELACIONES (CRUCIAL PARA TU APP) ---
+            // Esto permite que el frontend reciba los datos del médico o paciente
+            // cuando se cargan las relaciones.
             'paciente' => new PacienteResource($this->whenLoaded('paciente')),
-
-            // --- AÑADIDO: Perfil de Médico ---
-            // Usa MedicoResource si la relación 'medico' está cargada
             'medico' => new MedicoResource($this->whenLoaded('medico')),
         ];
     }
