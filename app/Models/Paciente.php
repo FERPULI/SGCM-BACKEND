@@ -21,6 +21,7 @@ class Paciente extends Model
         'fecha_nacimiento',
         'telefono',
         'direccion',
+        'genero',
         'tipo_sangre',
         'alergias',
     ];
@@ -34,11 +35,10 @@ class Paciente extends Model
         'fecha_nacimiento' => 'date',
     ];
 
-    // --- RELACIONES ---
+    // ───────── RELACIONES ─────────
 
     /**
-     * Define la relación inversa de "uno a uno" con el Usuario.
-     * Un perfil de paciente pertenece a una cuenta de usuario.
+     * Un perfil de paciente pertenece a un Usuario.
      */
     public function user(): BelongsTo
     {
@@ -46,8 +46,7 @@ class Paciente extends Model
     }
 
     /**
-     * Define la relación de "uno a muchos" con las Citas.
-     * Un paciente puede tener muchas citas.
+     * Un paciente puede tener muchas Citas.
      */
     public function citas(): HasMany
     {
@@ -55,8 +54,7 @@ class Paciente extends Model
     }
 
     /**
-     * Define la relación de "uno a muchos" con el Historial Médico.
-     * Un paciente puede tener muchos registros en su historial.
+     * Un paciente puede tener muchos registros de Historial Médico.
      */
     public function historialesMedicos(): HasMany
     {
