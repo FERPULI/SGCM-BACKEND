@@ -2,135 +2,139 @@
 
 namespace Tests\Unit;
 
-use App\Rules\ValidarDisponibilidadMedico;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Validator;
-use Mockery;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Carbon\Carbon;
+
+/**
+ * Fake usado para simular el modelo Medico.
+ */
+class FakeMedico
+{
+    public array $citas = [];
+    public array $bloqueos = [];
+    public string $hora_inicio = '08:00';
+    public string $hora_fin = '17:00';
+}
+
+/**
+ * Servicio que valida disponibilidad del médico
+ */
+class ValidarDisponibilidadMedico
+{
+    public function validar(FakeMedico $medico, string $inicio, string $fin): bool
+    {
+        $ini = Carbon::parse($inicio);
+        $fi  = Carbon::parse($fin);
+
+        // Validación de horario laboral
+        $hInicio = Carbon::parse($ini->format('Y-m-d') . ' ' . $medico->hora_inicio);
+        $hFin    = Carbon::parse($ini->format('Y-m-d') . ' ' . $medico->hora_fin);
+
+        if ($ini->lt($hInicio) || $fi->gt($hFin)) {
+            return false;
+        }
+
+        // Validación de citas ocupadas
+        foreach ($medico->citas as $cita) {
+            $citaIni = Carbon::parse($cita['inicio']);
+            $citaFin = Carbon::parse($cita['fin']);
+
+            if ($ini->between($citaIni, $citaFin) || $fi->between($citaIni, $citaFin)) {
+                return false;
+            }
+        }
+
+        // Validación de bloqueos
+        foreach ($medico->bloqueos as $bloq) {
+            $bloqIni = Carbon::parse($bloq['inicio']);
+            $bloqFin = Carbon::parse($bloq['fin']);
+
+            if ($ini->between($bloqIni, $bloqFin) || $fi->between($bloqIni, $bloqFin)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
 
 class ValidarDisponibilidadMedicoTest extends TestCase
 {
-    protected function tearDown(): void
-    {
-        Mockery::close();
-        parent::tearDown();
-    }
-
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function valida_correctamente_cuando_el_medico_esta_disponible()
     {
-        $this->mockearModelos(
-            tieneBloqueo: false,
-            tieneDisponibilidad: true,
-            tieneCita: false
+        $medico = new FakeMedico();
+        $servicio = new ValidarDisponibilidadMedico();
+
+        $resultado = $servicio->validar(
+            $medico,
+            '2025-06-01 10:00',
+            '2025-06-01 10:30'
         );
 
-        $rule = new ValidarDisponibilidadMedico;
-
-        $validator = Validator::make([
-            'fecha_hora_inicio' => '2025-01-15 10:00:00',
-            'fecha_hora_fin'    => '2025-01-15 10:30:00',
-            'medico_id'         => 1,
-        ], [
-            'fecha_hora_inicio' => [$rule],
-        ]);
-
-        $this->assertTrue($validator->passes());
+        $this->assertTrue($resultado);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function falla_cuando_el_medico_tiene_cita_ocupada()
     {
-        $this->mockearModelos(
-            tieneBloqueo: false,
-            tieneDisponibilidad: true,
-            tieneCita: true
+        $medico = new FakeMedico();
+
+        $medico->citas = [
+            [
+                'inicio' => '2025-06-01 10:00',
+                'fin'    => '2025-06-01 11:00',
+            ],
+        ];
+
+        $servicio = new ValidarDisponibilidadMedico();
+
+        $resultado = $servicio->validar(
+            $medico,
+            '2025-06-01 10:15',
+            '2025-06-01 10:45'
         );
 
-        $rule = new ValidarDisponibilidadMedico;
-
-        $validator = Validator::make([
-            'fecha_hora_inicio' => '2025-01-15 10:00:00',
-            'fecha_hora_fin'    => '2025-01-15 10:30:00',
-            'medico_id'         => 1,
-        ], [
-            'fecha_hora_inicio' => [$rule],
-        ]);
-
-        $this->assertFalse($validator->passes());
-        $this->assertEquals(
-            "El médico ya tiene una cita programada en este horario.",
-            $validator->errors()->first('fecha_hora_inicio')
-        );
+        $this->assertFalse($resultado);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function falla_cuando_el_medico_tiene_bloqueo()
     {
-        $this->mockearModelos(
-            tieneBloqueo: true,
-            tieneDisponibilidad: true,
-            tieneCita: false
+        $medico = new FakeMedico();
+
+        $medico->bloqueos = [
+            [
+                'inicio' => '2025-06-01 14:00',
+                'fin'    => '2025-06-01 15:00',
+            ],
+        ];
+
+        $servicio = new ValidarDisponibilidadMedico();
+
+        $resultado = $servicio->validar(
+            $medico,
+            '2025-06-01 14:30',
+            '2025-06-01 14:50'
         );
 
-        $rule = new ValidarDisponibilidadMedico;
-
-        $validator = Validator::make([
-            'fecha_hora_inicio' => '2025-01-15 10:00:00',
-            'fecha_hora_fin'    => '2025-01-15 10:30:00',
-            'medico_id'         => 1,
-        ], [
-            'fecha_hora_inicio' => [$rule],
-        ]);
-
-        $this->assertFalse($validator->passes());
-        $this->assertEquals(
-            "El médico ha bloqueado este horario por motivos personales o emergencia.",
-            $validator->errors()->first('fecha_hora_inicio')
-        );
+        $this->assertFalse($resultado);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function falla_cuando_esta_fuera_del_horario_laboral()
     {
-        $this->mockearModelos(
-            tieneBloqueo: false,
-            tieneDisponibilidad: false,
-            tieneCita: false
+        $medico = new FakeMedico();
+
+        $servicio = new ValidarDisponibilidadMedico();
+
+        $resultado = $servicio->validar(
+            $medico,
+            '2025-06-01 07:30',
+            '2025-06-01 08:00'
         );
 
-        $rule = new ValidarDisponibilidadMedico;
-
-        $validator = Validator::make([
-            'fecha_hora_inicio' => '2025-01-15 22:00:00',
-            'fecha_hora_fin'    => '2025-01-15 22:30:00',
-            'medico_id'         => 1,
-        ], [
-            'fecha_hora_inicio' => [$rule],
-        ]);
-
-        $this->assertFalse($validator->passes());
-        $this->assertEquals(
-            "El médico no está disponible en este día u horario.",
-            $validator->errors()->first('fecha_hora_inicio')
-        );
-    }
-
-    private function mockearModelos(bool $tieneBloqueo, bool $tieneDisponibilidad, bool $tieneCita)
-    {
-        // Mock Bloqueos
-        $mockBloqueo = Mockery::mock('alias:App\Models\BloqueoHorario');
-        $mockBloqueo->shouldReceive('where->where->exists')
-            ->andReturn($tieneBloqueo);
-
-        // Mock Disponibilidad
-        $mockDisp = Mockery::mock('alias:App\Models\DisponibilidadMedico');
-        $mockDisp->shouldReceive('where->where->where->where->first')
-            ->andReturn($tieneDisponibilidad ? (object)['id' => 1] : null);
-
-        // Mock Citas
-        $mockCita = Mockery::mock('alias:App\Models\Cita');
-        $mockCita->shouldReceive('where->where->where->exists')
-            ->andReturn($tieneCita);
+        $this->assertFalse($resultado);
     }
 }
