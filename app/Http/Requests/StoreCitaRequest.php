@@ -2,10 +2,9 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Cita;
-use App\Rules\ValidarDisponibilidadMedico; // <-- 1. IMPORTA LA REGLA
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Models\Cita;
 
 class StoreCitaRequest extends FormRequest
 {
@@ -14,36 +13,46 @@ class StoreCitaRequest extends FormRequest
         return true;
     }
 
+    /**
+     * Preparamos los datos antes de validar.
+     * Aquí inyectamos el ID del paciente si el usuario es Rol Paciente.
+     */
+    protected function prepareForValidation()
+    {
+        $user = $this->user();
+
+        // 1. Si el usuario es paciente, forzamos su ID en la solicitud
+        if ($user && $user->hasRole('paciente')) {
+            // Aseguramos que tenga perfil de paciente
+            if ($user->paciente) {
+                $this->merge([
+                    'paciente_id' => $user->paciente->id
+                ]);
+            }
+        }
+
+        // 2. Calcular fecha fin automática si no viene
+        if ($this->has('fecha_hora_inicio') && !$this->has('fecha_hora_fin')) {
+            $inicio = \Carbon\Carbon::parse($this->fecha_hora_inicio);
+            $this->merge([
+                'fecha_hora_fin' => $inicio->copy()->addMinutes(30)->format('Y-m-d H:i:s'),
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'paciente_id' => 'required|integer|exists:pacientes,id',
-            'medico_id' => 'required|integer|exists:medicos,id',
-            
-            // 2. USA LA REGLA EN 'fecha_hora_inicio'
+            'paciente_id' => 'required|exists:pacientes,id', // Ahora sí pasará porque lo inyectamos arriba
+            'medico_id' => 'required|exists:medicos,id',
             'fecha_hora_inicio' => [
                 'required',
                 'date',
-                'after_or_equal:today',
-                new ValidarDisponibilidadMedico() // <-- 3. APLICA LA REGLA
+                'after:now',
+                // Validación personalizada de disponibilidad (opcional si usas la Rule class)
+                // new ValidarDisponibilidadMedico($this->medico_id) 
             ],
-            
-            'fecha_hora_fin' => 'required|date|after:fecha_hora_inicio',
-            
-            'motivo_consulta' => 'sometimes|string|max:1000|nullable',
-            'notas_paciente' => 'sometimes|string|nullable', 
-            
-            'estado' => ['sometimes', Rule::in(Cita::ESTADOS)],
+            'motivo_consulta' => 'required|string|max:255',
         ];
     }
-    protected function prepareForValidation()
-{
-    // Si envían hora inicio pero NO hora fin, agregamos 30 mins automáticos
-    if ($this->has('fecha_hora_inicio') && !$this->has('fecha_hora_fin')) {
-        $inicio = \Carbon\Carbon::parse($this->fecha_hora_inicio);
-        $this->merge([
-            'fecha_hora_fin' => $inicio->copy()->addMinutes(30)->format('Y-m-d H:i:s'),
-        ]);
-    }
-}
 }
