@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
+// --- IMPORTS PARA EL CORREO ---
+use Illuminate\Support\Facades\Mail;
+use App\Mail\NuevaCitaMail;
+use App\Mail\CitaConfirmadaMail; // <--- AGREGADO
+
 class CitaController extends Controller
 {
     /**
@@ -23,7 +28,6 @@ class CitaController extends Controller
 
         $user = Auth::user();
         
-        // Cargamos relaciones (incluyendo especialidad para el frontend)
         $query = Cita::with(['paciente.user', 'medico.user', 'medico.especialidad']);
 
         // --- 1. Filtro por ROL ---
@@ -33,8 +37,7 @@ class CitaController extends Controller
             $query->where('medico_id', $user->medico->id);
         }
 
-        // --- 2. NUEVO: Filtro por FECHA (Agenda de Hoy) ---
-        // El frontend envía: /api/citas?fecha=2025-11-28
+        // --- 2. Filtro por FECHA (Agenda de Hoy) ---
         if ($request->has('fecha')) {
             $query->whereDate('fecha_hora_inicio', $request->get('fecha'));
         }
@@ -43,24 +46,33 @@ class CitaController extends Controller
         if ($request->has('estado')) {
             $estado = $request->get('estado');
             
-            if ($estado === 'pendientes') {
-                $query->where('estado', 'programada');
-            } elseif ($estado === 'activas') {
-                $query->whereIn('estado', ['programada', 'confirmada']);
-            } elseif (in_array($estado, ['completada', 'cancelada'])) {
-                $query->where('estado', $estado);
+            switch ($estado) {
+                case 'pendientes':
+                    $query->where('estado', 'programada');
+                    break;
+                case 'confirmadas':
+                    $query->where('estado', 'confirmada');
+                    break;
+                case 'completadas':
+                    $query->where('estado', 'completada');
+                    break;
+                case 'canceladas':
+                    $query->where('estado', 'cancelada');
+                    break;
+                case 'todas':
+                    break;
+                default:
+                    $query->where('estado', $estado);
+                    break;
             }
         }
 
         // --- RESPUESTA ---
-        // Si nos piden una fecha específica (Agenda), devolvemos todo sin paginar ordenado por hora
         if ($request->has('fecha')) {
              return CitaResource::collection($query->orderBy('fecha_hora_inicio', 'asc')->get());
         }
 
-        // Si es listado general, paginamos
         $citas = $query->orderBy('fecha_hora_inicio', 'desc')->paginate(10);
-        
         return CitaResource::collection($citas);
     }
 
@@ -88,6 +100,21 @@ class CitaController extends Controller
         $cita = Cita::create($datosValidados);
         $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
 
+        // =========================================================
+        // 📧 NOTIFICACIÓN: NUEVA CITA REGISTRADA
+        // =========================================================
+        try {
+            // Verificamos que el paciente tenga usuario y email
+            if ($cita->paciente && $cita->paciente->user) {
+                Mail::to($cita->paciente->user->email)->send(new NuevaCitaMail($cita));
+            }
+        } catch (\Exception $e) {
+           // ESTO NOS MOSTRARÁ EL ERROR EN POSTMAN
+            return response()->json([
+                'message' => 'La cita se guardó, PERO el correo falló.',
+                'error_tecnico' => $e->getMessage()
+            ], 500);}
+
         return (new CitaResource($cita))
             ->response()
             ->setStatusCode(201);
@@ -99,7 +126,6 @@ class CitaController extends Controller
     public function show(Cita $cita)
     {
         Gate::authorize('view', $cita);
-        
         $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
         return new CitaResource($cita);
     }
@@ -123,6 +149,23 @@ class CitaController extends Controller
 
         $cita->update($datos);
         $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
+
+        // =========================================================
+        // 📧 NOTIFICACIÓN: CITA CONFIRMADA (MODO DEPURACIÓN)
+        // =========================================================
+        if ($cita->wasChanged('estado') && $cita->estado === 'confirmada') {
+            try {
+                if ($cita->paciente && $cita->paciente->user) {
+                    Mail::to($cita->paciente->user->email)->send(new CitaConfirmadaMail($cita));
+                }
+            } catch (\Exception $e) {
+                // ⚠️ AQUÍ ESTÁ EL CAMBIO: Devuelve el error técnico en pantalla
+                return response()->json([
+                    'message' => 'La cita se actualizó, PERO el correo falló.',
+                    'error_tecnico' => $e->getMessage()
+                ], 500);
+            }
+        }
         
         return new CitaResource($cita);
     }
