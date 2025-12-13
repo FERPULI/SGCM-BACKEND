@@ -28,7 +28,6 @@ class ValidarDisponibilidadMedico implements ValidationRule, DataAwareRule
 
     /**
      * Ejecuta la regla de validación.
-     * (Lógica reordenada para priorizar bloqueos)
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
@@ -41,44 +40,38 @@ class ValidarDisponibilidadMedico implements ValidationRule, DataAwareRule
             return; // Otra regla se encargará
         }
 
-        // --- 1. (NUEVO) Validar Bloqueos PRIMERO (Tabla: bloqueos_horario) ---
+        // --- 1. Validar Bloqueos ---
         $conflictoBloqueo = BloqueoHorario::where('medico_id', $medicoId)
             ->where(function ($query) use ($fechaInicio, $fechaFin) {
-                 // Comprueba cualquier solapamiento
-                 $query->where('fecha_hora_inicio', '<', $fechaFin)
-                       ->where('fecha_hora_fin', '>', $fechaInicio);
+                $query->where('fecha_hora_inicio', '<', $fechaFin)
+                      ->where('fecha_hora_fin', '>', $fechaInicio);
             })
             ->exists();
 
         if ($conflictoBloqueo) {
-            // ¡Este es el error que deberías haber visto!
             $fail('El médico ha bloqueado este horario por motivos personales o emergencia.');
             return;
         }
 
-        // --- 2. Validar Horario Laboral (Tabla: disponibilidad_medicos) ---
-        $diaSemana = $fechaInicio->dayOfWeek; // 0=Domingo, 1=Lunes...
+        // --- 2. Validar Horario Laboral ---
+        $diaSemana = $fechaInicio->dayOfWeek;
         $horaInicio = $fechaInicio->format('H:i:s');
         
         $disponibilidad = DisponibilidadMedico::where('medico_id', $medicoId)
             ->where('dia_semana', $diaSemana)
-            // Comprobamos si la hora de inicio de la cita está DENTRO de algún turno
-            ->where('hora_inicio', '<=', $horaInicio) 
-            // Comprobamos si la hora de fin de la cita está DENTRO de ese mismo turno
-            ->where('hora_fin', '>=', $fechaFin->format('H:i:s')) 
+            ->where('hora_inicio', '<=', $horaInicio)
+            ->where('hora_fin', '>=', $fechaFin->format('H:i:s'))
             ->first();
 
         if (!$disponibilidad) {
-            // Este es el error que SÍ recibiste
             $fail('El médico no está disponible en este día u horario.');
             return;
         }
 
-        // --- 3. Validar Conflictos de Citas (Tabla: citas) ---
+        // --- 3. Validar Conflictos con otras Citas ---
         $conflictoCita = Cita::where('medico_id', $medicoId)
             ->where('estado', '!=', 'cancelada') 
             ->where(function ($query) use ($fechaInicio, $fechaFin) {
-                // Lógica de solapamiento
                 $query->where('fecha_hora_inicio', '<', $fechaFin)
                       ->where('fecha_hora_fin', '>', $fechaInicio);
             })
@@ -88,7 +81,14 @@ class ValidarDisponibilidadMedico implements ValidationRule, DataAwareRule
             $fail('El médico ya tiene una cita programada en este horario.');
             return;
         }
+    }
 
-        // Si pasa las 3 comprobaciones, la validación es exitosa.
+    /**
+     * Método añadido solo para compatibilidad con pruebas unitarias
+     * No interfiere con el sistema moderno de validación.
+     */
+    public function message(): string
+    {
+        return 'El médico no está disponible en este horario.';
     }
 }

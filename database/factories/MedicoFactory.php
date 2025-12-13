@@ -3,21 +3,19 @@
 namespace Database\Factories;
 
 use App\Models\Medico;
-use App\Models\User;
-use App\Models\Especialidad;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class MedicoFactory extends Factory
 {
     protected $model = Medico::class;
 
-    public function definition(): array
+    public function definition()
     {
         return [
-            'user_id' => User::factory(),
-            'especialidad_id' => Especialidad::factory(),
-            'licencia_medica' => strtoupper($this->faker->bothify('CMP-####')),
-            'telefono_consultorio' => $this->faker->numerify('01######'),
+            'usuario_id' => null, // SE SETEA DESDE EL TEST
+            'especialidad_id' => null,
+            'licencia_medica' => 'CMP-' . $this->faker->numberBetween(1000, 9999),
+            'telefono_consultorio' => $this->faker->phoneNumber(),
             'biografia' => $this->faker->sentence(),
         ];
     }

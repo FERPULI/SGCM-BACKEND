@@ -1,40 +1,44 @@
 <?php
 
+namespace Tests\Unit;
+
 use App\Models\BloqueoHorario;
+use Tests\TestCase;
 
-/*
-|--------------------------------------------------------------------------
-| Inicialización del entorno de pruebas
-| Permite usar Eloquent en memoria (sin base de datos)
-|--------------------------------------------------------------------------
-*/
-uses(Tests\TestCase::class);
+class BloqueoHorarioModelTest extends TestCase
+{
+    /**
+     * Probamos si un bloqueo horario guarda correctamente su información en memoria.
+     */
+    public function testUnBloqueoHorarioGuardaCorrectamenteSuInformacionEnMemoria()
+    {
+        // Creación del objeto en memoria
+        $bloqueo = new BloqueoHorario();
 
-test('un bloqueo horario guarda correctamente su informacion en memoria', function () {
+        // Asignación directa de valores en memoria (sin interactuar con la base de datos)
+        $bloqueo->medico_id = 1;
+        $bloqueo->fecha_inicio = '2024-06-15 08:00:00';
+        $bloqueo->fecha_fin = '2024-06-15 12:00:00';
+        $bloqueo->motivo = 'Vacaciones';
 
-    $bloqueo = new BloqueoHorario();
+        // Verificación de los valores asignados
+        $this->assertEquals(1, $bloqueo->medico_id);
+        $this->assertEquals('2024-06-15 08:00:00', $bloqueo->fecha_inicio);
+        $this->assertEquals('2024-06-15 12:00:00', $bloqueo->fecha_fin);
+        $this->assertEquals('Vacaciones', $bloqueo->motivo);
+    }
 
-    // ✅ Asignación directa en memoria
-    // Evitamos make() porque el modelo NO expone estos campos en $fillable
-    $bloqueo->medico_id    = 1;
-    $bloqueo->fecha_inicio = '2024-06-15 08:00:00';
-    $bloqueo->fecha_fin    = '2024-06-15 12:00:00';
-    $bloqueo->motivo       = 'Vacaciones';
+    /**
+     * Probamos si el ID del bloqueo horario se trata correctamente como un entero.
+     */
+    public function testElIdDelBloqueoHorarioSeTrataComoEnteroEnMemoria()
+    {
+        $bloqueo = new BloqueoHorario();
 
-    // ✅ Verificación estrictamente en memoria
-    expect($bloqueo->medico_id)->toBe(1)
-        ->and($bloqueo->fecha_inicio)->toBe('2024-06-15 08:00:00')
-        ->and($bloqueo->fecha_fin)->toBe('2024-06-15 12:00:00')
-        ->and($bloqueo->motivo)->toBe('Vacaciones');
-});
+        // Asignamos el ID como string
+        $bloqueo->id = "15";
 
-test('el id del bloqueo horario se trata como entero en memoria', function () {
-
-    $bloqueo = new BloqueoHorario();
-
-    // Asignación como string
-    $bloqueo->id = "15";
-
-    // Laravel/PHP lo maneja como entero
-    expect($bloqueo->id)->toBe(15);
-});
+        // Verificamos que el ID se trata como un entero
+        $this->assertEquals(15, $bloqueo->id);
+    }
+}

@@ -1,36 +1,38 @@
 <?php
 
-use App\Http\Controllers\API\AuthController;
-use Illuminate\Support\Facades\Route;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(Tests\TestCase::class);
+uses(RefreshDatabase::class);
 
-beforeEach(function () {
-    // Simulamos respuestas sin tocar BD ni backend
-    Route::post('/api/auth/register', function () {
-        return response()->json(['ok' => true], 201);
-    });
-
-    Route::post('/api/auth/login', function () {
-        return response()->json(['token' => 'fake-token'], 200);
-    });
-});
-
-test('rutas de auth: register y login existen y responden', function () {
-
-    $registerResponse = $this->postJson('/api/auth/register', [
-        'name' => 'Test Feature',
-        'email' => 'test+feature@example.com',
+test('register endpoint responde correctamente', function () {
+    $response = $this->postJson('/api/auth/register', [
+        'nombre' => 'Juan',
+        'apellidos' => 'Pérez',
+        'email' => 'juan@test.com',
         'password' => 'password',
         'password_confirmation' => 'password',
+        'rol' => 'paciente', // requerido por migration real
     ]);
 
-    $this->assertContains($registerResponse->status(), [200, 201, 422]);
+    $response->assertStatus(201);
+});
 
-    $loginResponse = $this->postJson('/api/auth/login', [
-        'email' => 'test+feature@example.com',
+test('login endpoint responde correctamente', function () {
+    $user = User::factory()->create([
+        'password' => bcrypt('password'),
+        'rol' => 'paciente',
+    ]);
+
+    $response = $this->postJson('/api/auth/login', [
+        'email' => $user->email,
         'password' => 'password',
     ]);
 
-    $this->assertContains($loginResponse->status(), [200]);
+    $response->assertStatus(200);
+});
+
+test('logout endpoint requiere autenticacion', function () {
+    $response = $this->postJson('/api/auth/logout');
+    $response->assertStatus(401);
 });

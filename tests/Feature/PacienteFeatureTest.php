@@ -7,7 +7,7 @@ use App\Models\Paciente;
 
 uses(RefreshDatabase::class);
 
-test('endpoints citas responden correctamente', function () {
+test('paciente dashboard responde', function () {
 
     $user = User::factory()->create([
         'rol' => 'paciente'
@@ -19,6 +19,6 @@ test('endpoints citas responden correctamente', function () {
 
     Sanctum::actingAs($user);
 
-    $this->getJson('/api/citas')
+    $this->getJson('/api/paciente/dashboard')
         ->assertStatus(200);
 });

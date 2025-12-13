@@ -1,26 +1,31 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+namespace Tests\Feature;
 
-uses(Tests\TestCase::class);
+use App\Models\User;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
 
-beforeEach(function () {
-    Route::get('/api/especialidades', fn () => response()->json([], 200));
-    Route::post('/api/especialidades', fn () => response()->json(['ok' => true], 201));
-});
+class EspecialidadFeatureTest extends TestCase
+{
+    public function test_index_especialidades_responde()
+    {
+        Sanctum::actingAs(User::factory()->create());
 
-test('especialidad endpoints: index y store (validacion)', function () {
+        $response = $this->getJson('/api/especialidades');
 
-    $resIndex = $this->getJson('/api/especialidades');
+        $response->assertStatus(200);
+    }
 
-    $this->assertNotEquals(404, $resIndex->status());
+    public function test_store_especialidad_responde()
+    {
+        Sanctum::actingAs(User::factory()->create());
 
-    $payload = [
-        'nombre' => 'Cardiología',
-        'descripcion' => 'Prueba Feature'
-    ];
+        $response = $this->postJson('/api/especialidades', [
+            'nombre' => 'Neurología',
+            'descripcion' => 'Sistema nervioso',
+        ]);
 
-    $resStore = $this->postJson('/api/especialidades', $payload);
-
-    $this->assertContains($resStore->status(), [200, 201, 422]);
-});
+        $response->assertStatus(201);
+    }
+}

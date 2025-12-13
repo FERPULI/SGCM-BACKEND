@@ -5,17 +5,13 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Relations\HasOne; // <-- Importante
+use Illuminate\Database\Eloquent\Factories\HasFactory; // <-- FALTA
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable;
+    use HasApiTokens, Notifiable, HasFactory; // <-- AQUÍ
 
-    /**
-     * Los atributos que se pueden asignar en masa.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'nombre',
         'apellidos',
@@ -25,24 +21,14 @@ class User extends Authenticatable
         'activo',
     ];
 
-    /**
-     * Los atributos que deben ocultarse para la serialización.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Los atributos que deben ser convertidos a tipos nativos.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'activo' => 'boolean', // Tu modelo original lo tenía
+        'activo' => 'boolean',
     ];
 
     // Helper: comprobar rol
@@ -60,19 +46,13 @@ class User extends Authenticatable
         return trim("{$this->nombre} {$this->apellidos}");
     }
 
-    // --- RELACIONES DE PERFIL (AÑADIDAS) ---
-
-    /**
-     * Define la relación "uno a uno" con el perfil de Paciente.
-     */
+    // Relación Paciente
     public function paciente(): HasOne
     {
         return $this->hasOne(Paciente::class, 'usuario_id');
     }
 
-    /**
-     * Define la relación "uno a uno" con el perfil de Médico.
-     */
+    // Relación Médico
     public function medico(): HasOne
     {
         return $this->hasOne(Medico::class, 'usuario_id');
