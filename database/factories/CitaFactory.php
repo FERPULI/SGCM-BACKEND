@@ -2,23 +2,24 @@
 
 namespace Database\Factories;
 
+use App\Models\Cita;
 use App\Models\Medico;
 use App\Models\Paciente;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CitaFactory extends Factory
 {
+    protected $model = Cita::class;
+
     public function definition(): array
     {
-        $inicio = now()->addDay()->setTime(11, 0);
-
         return [
             'medico_id' => Medico::factory(),
             'paciente_id' => Paciente::factory(),
-            'fecha_hora_inicio' => $inicio,
-            'fecha_hora_fin' => (clone $inicio)->addMinutes(30),
+            'fecha_hora_inicio' => now()->addDay()->setHour(10),
+            'fecha_hora_fin' => now()->addDay()->setHour(11),
             'estado' => 'programada',
-            'motivo' => 'Consulta general',
+            // ❌ 'motivo' ELIMINADO (no existe en la tabla)
         ];
     }
 }
