@@ -19,10 +19,10 @@ return [
 
     'allowed_methods' => ['*'],
 
-    // CAMBIO IMPORTANTE AQUÍ:
-    // Usamos '*' para permitir todas las conexiones durante el desarrollo.
-    // Esto soluciona el error sin importar si usas el puerto 3000, 5173 o cualquier otro.
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        // Pega la URL de tu frontend (con el puerto 3000) aquí
+        'http://localhost:3000', 
+    ],
 
     'allowed_origins_patterns' => [],
 

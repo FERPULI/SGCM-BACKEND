@@ -3,57 +3,90 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Http\Resources\CitaResource;
+use App\Models\Cita;
+use App\Models\User;
 use App\Models\Paciente;
 use App\Models\Medico;
-use App\Models\Cita;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function getStats()
+    /**
+     * Obtiene todas las estadísticas para el panel de administración.
+     */
+    public function getStats(Request $request)
     {
-        // 1. TARJETAS SUPERIORES
-        $totalPacientes = Paciente::count();
-        $totalMedicos   = Medico::count();
-        // Citas que ocurren HOY (usamos la fecha del servidor, ojo con la zona horaria que configuramos antes)
-        $citasHoy       = Cita::whereDate('fecha_hora_inicio', Carbon::today())->count();
-        $pendientes     = Cita::where('estado', 'programada')->count();
+        // --- 1. Fechas de Referencia ---
+        $today = Carbon::today();
+        $startOfMonth = Carbon::now()->startOfMonth();
 
-        // 2. ACTIVIDAD DEL SISTEMA (Cálculos de porcentajes)
-        $totalCitas   = Cita::count();
-        $completadas  = Cita::where('estado', 'completada')->count();
-        $canceladas   = Cita::where('estado', 'cancelada')->count();
+        // --- 2. Estadísticas de Usuarios ---
+        $totalPacientes = Paciente::count(); // Más preciso usar el modelo Paciente
+        $totalMedicos = Medico::count();     // Más preciso usar el modelo Medico
+        $nuevosUsuariosEsteMes = User::where('created_at', '>=', $startOfMonth)->count();
 
-        // Evitamos división por cero si no hay citas
-        $tasaCompletacion = $totalCitas > 0 ? round(($completadas / $totalCitas) * 100) : 0;
-        $tasaCancelacion  = $totalCitas > 0 ? round(($canceladas / $totalCitas) * 100) : 0;
+        // --- 3. Estadísticas de Citas (Globales) ---
+        
+        // A. Citas Hoy
+        $citasHoy = Cita::whereDate('fecha_hora_inicio', $today)->count();
+        
+        // B. Total Histórico
+        $totalCitas = Cita::count();
 
-        // 3. ESTADÍSTICAS RÁPIDAS
-        $citasMes       = Cita::whereMonth('fecha_hora_inicio', Carbon::now()->month)->count();
-        // Pacientes registrados este mes
-        $nuevosPacientes = Paciente::whereMonth('created_at', Carbon::now()->month)->count();
+        // C. Desglose por Estado
+        $citasPendientes = Cita::where('estado', 'programada')->count();
+        $citasConfirmadas = Cita::where('estado', 'confirmada')->count();
+        $citasCompletadas = Cita::where('estado', 'completada')->count();
+        $citasCanceladas = Cita::where('estado', 'cancelada')->count();
 
+        // D. Citas "Activas" (Pendientes + Confirmadas) -> Para tu requerimiento específico
+        $citasActivas = $citasPendientes + $citasConfirmadas;
+        
+        // E. Este Mes
+        $citasEsteMes = Cita::where('fecha_hora_inicio', '>=', $startOfMonth)->count();
+
+        // --- 4. Cálculo de Tasas (KPIs) ---
+        $totalCitasGestionadas = $citasCompletadas + $citasCanceladas;
+        
+        $tasaCompletacion = ($totalCitasGestionadas > 0) 
+            ? round(($citasCompletadas / $totalCitasGestionadas) * 100, 2) 
+            : 0;
+            
+        $tasaCancelacion = ($totalCitasGestionadas > 0) 
+            ? round(($citasCanceladas / $totalCitasGestionadas) * 100, 2) 
+            : 0;
+
+        // --- 5. Citas Recientes (Para la tabla inferior del dashboard) ---
+        $citasRecientes = Cita::with(['paciente.user', 'medico.user', 'medico.especialidad'])
+            ->orderBy('fecha_hora_inicio', 'desc')
+            ->limit(5)
+            ->get();
+
+        // --- 6. Ensamblar Respuesta JSON ---
         return response()->json([
-            'success' => true,
-            'data' => [
-                'cards' => [
-                    'pacientes' => $totalPacientes,
-                    'medicos'   => $totalMedicos,
-                    'citas_hoy' => $citasHoy,
-                    'pendientes'=> $pendientes
-                ],
-                'activity' => [
-                    'completadas'       => $completadas,
-                    'tasa_completacion' => $tasaCompletacion,
-                    'tasa_cancelacion'  => $tasaCancelacion
-                ],
-                'quick' => [
-                    'total_citas'      => $totalCitas,
-                    'citas_mes'        => $citasMes,
-                    'nuevos_pacientes' => $nuevosPacientes
-                ]
-            ]
+            // Tarjetas Superiores (KPIs)
+            'totalPacientes' => $totalPacientes,
+            'totalMedicos' => $totalMedicos,
+            'citasHoy' => $citasHoy,
+            'citasActivas' => $citasActivas, // <--- ¡NUEVO!
+            'citasPendientes' => $citasPendientes,
+            'citasConfirmadas' => $citasConfirmadas,
+
+            // Sección "Actividad del Sistema"
+            'citasCompletadas' => $citasCompletadas,
+            'citasCanceladas' => $citasCanceladas,
+            'tasaCompletacion' => $tasaCompletacion,
+            'tasaCancelacion' => $tasaCancelacion,
+
+            // Sección "Estadísticas Rápidas"
+            'totalCitas' => $totalCitas,
+            'citasEsteMes' => $citasEsteMes,
+            'nuevosUsuarios' => $nuevosUsuariosEsteMes,
+            
+            // Sección "Citas Recientes"
+            'citasRecientes' => CitaResource::collection($citasRecientes),
         ]);
     }
 }
