@@ -9,6 +9,7 @@ use App\Http\Requests\RegisterRequest; // Asegúrate de que este Request exista 
 use App\Http\Requests\LoginRequest;    // Asegúrate de que este Request exista
 use App\Http\Requests\UpdateProfileRequest; // Asegúrate de que este Request exista
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use App\Http\Resources\UserResource;
 use Illuminate\Validation\ValidationException;
 
@@ -90,24 +91,58 @@ class AuthController extends Controller
         return response()->json(['user' => new UserResource($user)], 200);
     }
 
-    public function updateProfile(UpdateProfileRequest $request)
+    public function updateProfile(Request $request)
     {
-        $user = $request->user();
-        $data = $request->validated();
+        $user = Auth::user();
 
-        if (!empty($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
-        } else {
-            unset($data['password']);
+        // Validamos los datos
+        $datos = $request->validate([
+            'nombre' => 'required|string|max:255',
+            'apellidos' => 'required|string|max:255',
+            // El email debe ser único, pero ignorando el ID del usuario actual
+            'email' => 'required|email|unique:users,email,' . $user->id,
+        ]);
+
+        // Actualizamos la tabla users
+        /** @var \App\Models\User $user */
+        $user->update([
+            'nombre' => $datos['nombre'],
+            'apellidos' => $datos['apellidos'],
+            'email' => $datos['email']
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Perfil actualizado correctamente',
+            'user' => $user
+        ]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'new_password' => 'required|string|min:6|confirmed', // 'confirmed' busca un campo new_password_confirmation
+        ]);
+
+        $user = Auth::user();
+
+        // Verificar que la contraseña actual sea correcta
+        if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'message' => 'La contraseña actual no es correcta.'
+            ], 400);
         }
 
-        unset($data['rol']); // no permitir cambiar rol desde aquí
-        $user->update($data);
-        
-        // Refrescamos y cargamos relaciones para devolver el objeto actualizado completo
-        $user->refresh(); 
-        $user->load(['paciente', 'medico']);
+        // Actualizar contraseña
+        /** @var \App\Models\User $user */
+        $user->update([
+            'password' => \Illuminate\Support\Facades\Hash::make($request->new_password)
+        ]);
 
-        return response()->json(['user' => new UserResource($user)], 200);
+        return response()->json([
+            'success' => true,
+            'message' => 'Contraseña actualizada exitosamente.'
+        ]);
     }
 }
