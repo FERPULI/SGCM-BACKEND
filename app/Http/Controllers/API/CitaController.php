@@ -37,9 +37,18 @@ class CitaController extends Controller
             $query->where('medico_id', $user->medico->id);
         }
 
-        // --- 2. Filtro por FECHA (Agenda de Hoy) ---
-        if ($request->has('fecha')) {
-            $query->whereDate('fecha_hora_inicio', $request->get('fecha'));
+        // --- 3. Buscador Global ---
+        if ($search = $request->input('search')) {
+            $query->where(function($q) use ($search) {
+                // CORRECCIÓN: Aquí también cambiamos 'usuario' por 'user'
+                $q->whereHas('paciente.user', function ($subQ) use ($search) {
+                    $subQ->where('nombre', 'like', "%{$search}%")
+                         ->orWhere('apellidos', 'like', "%{$search}%");
+                })->orWhereHas('medico.user', function ($subQ) use ($search) {
+                    $subQ->where('nombre', 'like', "%{$search}%")
+                         ->orWhere('apellidos', 'like', "%{$search}%");
+                });
+            });
         }
 
         // --- 3. Filtro por ESTADO ---
@@ -133,7 +142,7 @@ class CitaController extends Controller
     /**
      * Actualiza una cita.
      */
-    public function update(UpdateCitaRequest $request, Cita $cita)
+public function update(Request $request, $id)
     {
         Gate::authorize('update', $cita);
 
@@ -143,33 +152,41 @@ class CitaController extends Controller
 
         $datos = $request->validated();
         
-        if (isset($datos['fecha_hora_inicio'])) {
-             $datos['estado'] = 'programada';
+        if (!$cita) {
+            return response()->json(['success' => false, 'message' => 'Cita no encontrada'], 404);
         }
 
-        $cita->update($datos);
-        $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
+        if (in_array($cita->estado, ['cancelada', 'completada'])) {
+             return response()->json([
+                 'success' => false,
+                 'message' => 'No se puede editar una cita finalizada o cancelada.'
+             ], 409);
+        }
 
-        // =========================================================
-        // 📧 NOTIFICACIÓN: CITA CONFIRMADA (MODO DEPURACIÓN)
-        // =========================================================
-        if ($cita->wasChanged('estado') && $cita->estado === 'confirmada') {
+        // 1. Preparamos los datos que vienen del frontend
+        $datos = $request->all();
+
+        // 2. LÓGICA CRÍTICA: Si se está editando la fecha/hora de inicio,
+        // debemos recalcular obligatoriamente la fecha de fin.
+        if ($request->has('fecha_hora_inicio')) {
             try {
-                if ($cita->paciente && $cita->paciente->user) {
-                    Mail::to($cita->paciente->user->email)->send(new CitaConfirmadaMail($cita));
-                }
+                $inicio = \Carbon\Carbon::parse($datos['fecha_hora_inicio']);
+                // Recalculamos el fin (30 min después del nuevo inicio)
+                $datos['fecha_hora_fin'] = $inicio->copy()->addMinutes(30);
             } catch (\Exception $e) {
-                // ⚠️ AQUÍ ESTÁ EL CAMBIO: Devuelve el error técnico en pantalla
-                return response()->json([
-                    'message' => 'La cita se actualizó, PERO el correo falló.',
-                    'error_tecnico' => $e->getMessage()
-                ], 500);
+                // Si la fecha viene mal formato, ignoramos o lanzamos error
             }
         }
-        
-        return new CitaResource($cita);
-    }
 
+        // 3. Actualizamos con los datos procesados (incluyendo la nueva fecha fin)
+        $cita->update($datos);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $cita,
+            'message' => 'Cita actualizada correctamente'
+        ]);
+    }
     /**
      * Cancela una cita.
      */
@@ -186,4 +203,37 @@ class CitaController extends Controller
         
         return new CitaResource($cita);
     }
+
+    public function listarPacientes()
+    {
+        // Traemos todos los pacientes con su usuario asociado
+        $pacientes = \App\Models\Paciente::with('user:id,nombre,apellidos')->get();
+
+        // Transformamos la data para enviar solo lo necesario: ID del PACIENTE y Nombre Completo
+        $lista = $pacientes->map(function($paciente) {
+            return [
+                'id' => $paciente->id, // Este es el ID que guardaremos en la cita
+                'nombre' => $paciente->user 
+                    ? $paciente->user->nombre . ' ' . $paciente->user->apellidos 
+                    : 'Usuario Desconocido'
+            ];
+        });
+
+        return response()->json($lista);
+    }
+    public function listarMedicos()
+    {
+        $medicos = \App\Models\Medico::with('user:id,nombre,apellidos')->get();
+
+        $lista = $medicos->map(function($medico) {
+            return [
+                'id' => $medico->id, // Este es el ID del MEDICO (no del usuario)
+                'nombre' => $medico->user 
+                    ? 'Dr(a). ' . $medico->user->nombre . ' ' . $medico->user->apellidos 
+                    : 'Médico Desconocido'
+            ];
+        });
+
+        return response()->json($lista);
+    }    
 }
