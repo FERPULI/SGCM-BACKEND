@@ -3,36 +3,34 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreCitaRequest;
+use App\Http\Requests\UpdateCitaRequest;
+use App\Http\Resources\CitaResource;
 use App\Models\Cita;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+
+// --- IMPORTS PARA EL CORREO ---
 use Illuminate\Support\Facades\Mail;
-// Asegúrate de tener estos Mails creados, si no, comenta las líneas de Mail::to
 use App\Mail\NuevaCitaMail;
-use App\Mail\CitaConfirmadaMail; 
+use App\Mail\CitaConfirmadaMail; // <--- AGREGADO
 
 class CitaController extends Controller
 {
     /**
-     * Muestra lista de citas + Estadísticas para el Dashboard.
+     * Muestra una lista de las citas, filtrada por rol, estado y FECHA.
      */
     public function index(Request $request)
     {
-        // Si no tienes Policies creadas, comenta esta línea para evitar error 403
-        // Gate::authorize('viewAny', Cita::class);
+        Gate::authorize('viewAny', Cita::class);
 
         $user = Auth::user();
         
-        // 1. Eager Loading (Carga optimizada de relaciones)
-        // NOTA: Usamos 'usuario' porque así confirmamos que se llama la relación en tu modelo
-        $query = Cita::with([
-            'paciente.user:id,nombre,apellidos,email', 
-            'medico.user:id,nombre,apellidos,email', 
-            'medico.especialidad:id,nombre'
-        ]);
+        $query = Cita::with(['paciente.user', 'medico.user', 'medico.especialidad']);
 
-        // --- 2. Filtro por ROL (Seguridad) ---
+        // --- 1. Filtro por ROL ---
         if ($user->hasRole('paciente')) {
             $query->where('paciente_id', $user->paciente->id);
         } elseif ($user->hasRole('medico')) {
@@ -53,90 +51,92 @@ class CitaController extends Controller
             });
         }
 
-        // --- 4. Filtros de ESTADO ---
-        if ($status = $request->input('status')) {
-            if ($status !== 'todas' && $status !== null) {
-                if ($status === 'activas') {
-                    $query->whereIn('estado', ['programada', 'confirmada']);
-                } else {
-                    $query->where('estado', $status);
-                }
+        // --- 3. Filtro por ESTADO ---
+        if ($request->has('estado')) {
+            $estado = $request->get('estado');
+            
+            switch ($estado) {
+                case 'pendientes':
+                    $query->where('estado', 'programada');
+                    break;
+                case 'confirmadas':
+                    $query->where('estado', 'confirmada');
+                    break;
+                case 'completadas':
+                    $query->where('estado', 'completada');
+                    break;
+                case 'canceladas':
+                    $query->where('estado', 'cancelada');
+                    break;
+                case 'todas':
+                    break;
+                default:
+                    $query->where('estado', $estado);
+                    break;
             }
         }
 
-        // --- 5. Ordenamiento y Paginación ---
+        // --- RESPUESTA ---
+        if ($request->has('fecha')) {
+             return CitaResource::collection($query->orderBy('fecha_hora_inicio', 'asc')->get());
+        }
+
         $citas = $query->orderBy('fecha_hora_inicio', 'desc')->paginate(10);
-
-        // --- 6. ESTADÍSTICAS ---
-        $stats = [
-            'total'       => Cita::count(),
-            'activas'     => Cita::whereIn('estado', ['programada', 'confirmada'])->count(),
-            'pendientes'  => Cita::where('estado', 'programada')->count(),
-            'completadas' => Cita::where('estado', 'completada')->count(),
-            'canceladas'  => Cita::where('estado', 'cancelada')->count(),
-        ];
-
-        // --- 7. RESPUESTA JSON FINAL ---
-        return response()->json([
-            'success' => true,
-            'data'    => $citas,
-            'stats'   => $stats,
-            'message' => 'Citas obtenidas correctamente'
-        ]);
+        return CitaResource::collection($citas);
     }
 
     /**
      * Almacena una nueva cita.
      */
-    public function store(Request $request)
+    public function store(StoreCitaRequest $request)
     {
-        // Validación básica
-        $datos = $request->validate([
-            'paciente_id' => 'required|exists:pacientes,id',
-            'medico_id'   => 'required|exists:medicos,id',
-            'fecha_hora_inicio' => 'required|date',
-            'motivo_consulta' => 'nullable|string'
-        ]);
+        Gate::authorize('create', Cita::class);
 
-        // Cálculo automático de fin (30 min)
-        $inicio = \Carbon\Carbon::parse($datos['fecha_hora_inicio']);
-        $datos['fecha_hora_fin'] = $inicio->copy()->addMinutes(30);
-        $datos['estado'] = 'programada';
+        $datosValidados = $request->validated();
+        $user = Auth::user();
+
+        if ($user->hasRole('paciente')) {
+            $datosValidados['paciente_id'] = $user->paciente->id;
+        }
         
-        $cita = Cita::create($datos);
-        
-        // Intentar enviar correo (dentro de try/catch para no fallar si no hay config de mail)
-        try {
-            $cita->load('paciente.usuario');
-            if ($cita->paciente && $cita->paciente->usuario) {
-                Mail::to($cita->paciente->usuario->email)->send(new NuevaCitaMail($cita));
-            }
-        } catch (\Exception $e) {
-            // Log::error("Error enviando correo: " . $e->getMessage());
+        if (!isset($datosValidados['fecha_hora_fin'])) {
+             $inicio = \Carbon\Carbon::parse($datosValidados['fecha_hora_inicio']);
+             $datosValidados['fecha_hora_fin'] = $inicio->addMinutes(30)->format('Y-m-d H:i:s');
         }
 
-        return response()->json([
-            'success' => true,
-            'data'    => $cita,
-            'message' => 'Cita creada exitosamente'
-        ], 201);
+        $datosValidados['estado'] = 'programada';
+        
+        $cita = Cita::create($datosValidados);
+        $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
+
+        // =========================================================
+        // 📧 NOTIFICACIÓN: NUEVA CITA REGISTRADA
+        // =========================================================
+        try {
+            // Verificamos que el paciente tenga usuario y email
+            if ($cita->paciente && $cita->paciente->user) {
+                Mail::to($cita->paciente->user->email)->send(new NuevaCitaMail($cita));
+            }
+        } catch (\Exception $e) {
+           // ESTO NOS MOSTRARÁ EL ERROR EN POSTMAN
+            return response()->json([
+                'message' => 'La cita se guardó, PERO el correo falló.',
+                'error_tecnico' => $e->getMessage()
+            ], 500);}
+
+        return (new CitaResource($cita))
+            ->response()
+            ->setStatusCode(201);
     }
 
     /**
      * Muestra una cita específica.
      */
-    public function show($id)
+    public function show(Cita $cita)
     {
-        $cita = Cita::with(['paciente.usuario', 'medico.usuario', 'medico.especialidad'])->find($id);
-
-        if (!$cita) {
-            return response()->json(['success' => false, 'message' => 'Cita no encontrada'], 404);
-        }
-        
-        return response()->json([
-            'success' => true,
-            'data'    => $cita
-        ]);
+        Gate::authorize('view', $cita);
+        $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
+        return new CitaResource($cita);
     }
 
     /**
@@ -144,7 +144,13 @@ class CitaController extends Controller
      */
 public function update(Request $request, $id)
     {
-        $cita = Cita::find($id);
+        Gate::authorize('update', $cita);
+
+        if (in_array($cita->estado, ['cancelada', 'completada'])) {
+             return response()->json(['message' => 'No se puede editar una cita finalizada o cancelada.'], 409);
+        }
+
+        $datos = $request->validated();
         
         if (!$cita) {
             return response()->json(['success' => false, 'message' => 'Cita no encontrada'], 404);
@@ -184,28 +190,18 @@ public function update(Request $request, $id)
     /**
      * Cancela una cita.
      */
-    public function destroy($id)
+    public function destroy(Cita $cita)
     {
-        $cita = Cita::find($id);
-
-        if (!$cita) {
-            return response()->json(['success' => false, 'message' => 'Cita no encontrada'], 404);
-        }
+        Gate::authorize('delete', $cita);
         
         if ($cita->estado == 'completada') {
-             return response()->json([
-                 'success' => false, 
-                 'message' => 'No se puede cancelar una cita que ya ha finalizado.'
-             ], 409);
+             return response()->json(['message' => 'No se puede cancelar una cita que ya ha finalizado.'], 409);
         }
 
         $cita->update(['estado' => 'cancelada']);
+        $cita->load(['paciente.user', 'medico.user', 'medico.especialidad']);
         
-        return response()->json([
-            'success' => true,
-            'data'    => $cita,
-            'message' => 'Cita cancelada correctamente'
-        ]);
+        return new CitaResource($cita);
     }
 
     public function listarPacientes()
