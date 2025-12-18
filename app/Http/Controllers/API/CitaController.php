@@ -42,6 +42,10 @@ class CitaController extends Controller
         // --- 3. Buscador Global ---
         if ($search = $request->input('search')) {
             $query->where(function($q) use ($search) {
+<<<<<<< HEAD
+=======
+                // CORRECCIÓN: Aquí también cambiamos 'usuario' por 'user'
+>>>>>>> main
                 $q->whereHas('paciente.user', function ($subQ) use ($search) {
                     $subQ->where('nombre', 'like', "%{$search}%")
                          ->orWhere('apellidos', 'like', "%{$search}%");
@@ -141,13 +145,18 @@ class CitaController extends Controller
     /**
      * Actualiza una cita.
      */
+<<<<<<< HEAD
     public function update(Request $request, $id)
+=======
+public function update(Request $request, $id)
+>>>>>>> main
     {
         $cita = Cita::find($id);
         
         if (!$cita) {
             return response()->json(['success' => false, 'message' => 'Cita no encontrada'], 404);
         }
+<<<<<<< HEAD
 
         // Protección: No editar citas ya cerradas
         if (in_array($cita->estado, ['cancelada', 'completada'])) {
@@ -185,7 +194,40 @@ class CitaController extends Controller
             'message' => 'Cita actualizada correctamente'
         ]);
     }
+=======
 
+        if (in_array($cita->estado, ['cancelada', 'completada'])) {
+             return response()->json([
+                 'success' => false,
+                 'message' => 'No se puede editar una cita finalizada o cancelada.'
+             ], 409);
+        }
+
+        // 1. Preparamos los datos que vienen del frontend
+        $datos = $request->all();
+
+        // 2. LÓGICA CRÍTICA: Si se está editando la fecha/hora de inicio,
+        // debemos recalcular obligatoriamente la fecha de fin.
+        if ($request->has('fecha_hora_inicio')) {
+            try {
+                $inicio = \Carbon\Carbon::parse($datos['fecha_hora_inicio']);
+                // Recalculamos el fin (30 min después del nuevo inicio)
+                $datos['fecha_hora_fin'] = $inicio->copy()->addMinutes(30);
+            } catch (\Exception $e) {
+                // Si la fecha viene mal formato, ignoramos o lanzamos error
+            }
+        }
+>>>>>>> main
+
+        // 3. Actualizamos con los datos procesados (incluyendo la nueva fecha fin)
+        $cita->update($datos);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $cita,
+            'message' => 'Cita actualizada correctamente'
+        ]);
+    }
     /**
      * Cancela una cita.
      */
@@ -212,6 +254,10 @@ class CitaController extends Controller
             'message' => 'Cita cancelada correctamente'
         ]);
     }
+<<<<<<< HEAD
+=======
+
+>>>>>>> main
     public function listarPacientes()
     {
         // Traemos todos los pacientes con su usuario asociado
@@ -229,10 +275,13 @@ class CitaController extends Controller
 
         return response()->json($lista);
     }
+<<<<<<< HEAD
 
     /**
      * Obtener lista simple de médicos para selectores
      */
+=======
+>>>>>>> main
     public function listarMedicos()
     {
         $medicos = \App\Models\Medico::with('user:id,nombre,apellidos')->get();
@@ -247,5 +296,10 @@ class CitaController extends Controller
         });
 
         return response()->json($lista);
+<<<<<<< HEAD
     }
 }
+=======
+    }    
+}
+>>>>>>> main

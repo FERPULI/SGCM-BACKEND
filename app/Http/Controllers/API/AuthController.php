@@ -91,7 +91,7 @@ class AuthController extends Controller
         return response()->json(['user' => new UserResource($user)], 200);
     }
 
-public function updateProfile(Request $request)
+    public function updateProfile(Request $request)
     {
         $user = Auth::user();
 
@@ -118,9 +118,6 @@ public function updateProfile(Request $request)
         ]);
     }
 
-    /**
-     * Cambiar contraseña
-     */
     public function changePassword(Request $request)
     {
         $request->validate([
