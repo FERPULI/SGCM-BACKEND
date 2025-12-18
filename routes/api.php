@@ -12,7 +12,6 @@ use App\Http\Controllers\API\PacienteDashboardController;
 use App\Http\Controllers\API\DisponibilidadController;
 use App\Http\Controllers\API\HistorialMedicoController;
 use App\Http\Controllers\API\HorarioController;
-use App\Http\Controllers\API\CitaController; 
 
 Route::post('auth/login', [AuthController::class,'login']);
 Route::post('auth/register', [AuthController::class,'register']);
