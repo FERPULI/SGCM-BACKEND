@@ -13,6 +13,7 @@ class PacienteFactory extends Factory
     public function definition(): array
     {
         return [
+            // Usamos la clave foránea real de tu tabla: usuario_id
             'usuario_id' => User::factory()->state([
                 'rol' => 'paciente',
             ]),
