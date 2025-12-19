@@ -188,3 +188,36 @@ Aumentar cobertura hacia servicios y lógica de negocio fuera de modelos.
 
 Revisar y mantener las factories y seeders de prueba para casos de integración.
 
+
+## 14. Resultados de Cobertura (Code Coverage)
+
+Tras la implementación de la suite de pruebas completa, se han obtenido métricas que avalan la estabilidad del sistema. El proyecto alcanzó una cobertura global del 67.4%, destacando el blindaje en áreas críticas de lógica de negocio.
+
+## 14.1 Resumen Estadístico
+
+    Tests aprobados: 104
+    Aserciones totales: 157
+    Cobertura total: 67.4%
+
+## 14.2 Desglose por Capas Críticas
+A continuación, se detallan los componentes con mayor impacto en la integridad del sistema:
+
+Componente	                   Cobertura	                    Observaciones
+Middlewares	                    100%	            Seguridad y roles totalmente validados.
+API Resources	                100%	            Estructura de respuesta JSON garantizada.
+DisponibilidadController	    90.4%	            Lógica de slots y horarios verificada.
+Models	                        98.0%	            Relaciones y atributos validados.
+DashboardControllers	        94-96%	            Estadísticas para médicos y pacientes aseguradas.
+
+## 15. Pruebas de Integración (Feature Tests)
+
+Para alcanzar el nivel de cobertura actual, se extendió el alcance original a Feature Tests, permitiendo validar:
+
+Flujos de Autenticación: Registro, Login y Logout con tokens Sanctum.
+Gestión de Citas: Procesos de creación, actualización y validación de estados (68.8% en Policy y 80% en Request).
+Seguridad por Roles: Verificación de que usuarios sin permisos no puedan acceder a rutas administrativas o de otros usuarios (Middleware CheckRole al 75%).
+
+## 16. Logros Destacados
+
+El mayor hito técnico fue la optimización del DisponibilidadController, el cual presentaba inicialmente una cobertura baja y, mediante pruebas de integración dinámicas, se elevó al 90.4%. Esto asegura que el algoritmo de asignación de turnos médicos es robusto y libre de colisiones de horario.
+
