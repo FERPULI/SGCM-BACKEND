@@ -2,29 +2,23 @@
 
 namespace App\Providers;
 
-use App\Models\Cita; // <-- 1. IMPORTA EL MODELO
-use App\Policies\CitaPolicy; // <-- 2. IMPORTA LA POLÍTICA
-use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
-// ...
+use Illuminate\Support\ServiceProvider;
 
-class AuthServiceProvider extends ServiceProvider
+class AppServiceProvider extends ServiceProvider
 {
     /**
-     * The model to policy mappings for the application.
-     *
-     * @var array<class-string, class-string>
+     * Register any application services.
      */
-    protected $policies = [
-        // ... (otros policies si los tienes)
-        Cita::class => CitaPolicy::class, // <-- 3. AÑADE ESTA LÍNEA
-    ];
+    public function register(): void
+    {
+        //
+    }
 
     /**
-     * Register any authentication / authorization services.
+     * Bootstrap any application services.
      */
     public function boot(): void
     {
-        $this->registerPolicies();
         //
     }
 }
