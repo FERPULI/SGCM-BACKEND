@@ -21,7 +21,7 @@ return [
 
     'allowed_origins' => [
         // Pega la URL de tu frontend (con el puerto 3000) aquí
-        'http://localhost:3000', 'https://anakondita.com'
+        'https://anakondita.com',
     ],
 
     'allowed_origins_patterns' => [],
