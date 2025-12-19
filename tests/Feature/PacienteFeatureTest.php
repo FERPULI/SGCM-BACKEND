@@ -19,6 +19,7 @@ test('paciente dashboard responde', function () {
 
     Sanctum::actingAs($user);
 
-    $this->getJson('/api/paciente/dashboard')
-        ->assertStatus(200);
+    $response = $this->getJson('/api/paciente/dashboard');
+
+    $response->assertStatus(200);
 });

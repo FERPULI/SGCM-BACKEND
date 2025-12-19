@@ -11,10 +11,9 @@ class MedicoFactory extends Factory
 {
     protected $model = Medico::class;
 
-    public function definition(): array
+    public function definition()
     {
         return [
-            // Se crea SIEMPRE un usuario válido
             'usuario_id' => User::factory(),
             'especialidad_id' => Especialidad::factory(),
             'licencia_medica' => $this->faker->bothify('CMP-####'),

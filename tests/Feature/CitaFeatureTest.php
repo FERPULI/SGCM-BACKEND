@@ -19,6 +19,7 @@ test('endpoints citas responden correctamente', function () {
 
     Sanctum::actingAs($user);
 
-    $this->getJson('/api/citas')
-        ->assertStatus(200);
+    $response = $this->getJson('/api/citas');
+
+    $response->assertStatus(200);
 });

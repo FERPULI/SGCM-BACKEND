@@ -23,6 +23,7 @@ test('medico stats responde', function () {
 
     Sanctum::actingAs($user);
 
-    $this->getJson('/api/medico/stats')
-        ->assertStatus(200);
+    $response = $this->getJson('/api/medico/stats');
+
+    $response->assertStatus(200);
 });

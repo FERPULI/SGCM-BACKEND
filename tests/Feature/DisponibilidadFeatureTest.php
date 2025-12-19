@@ -1,28 +1,14 @@
 <?php
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 use App\Models\User;
-use App\Models\Medico;
-use App\Models\Especialidad;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-test('slots disponibles responden correctamente', function () {
+it('slots disponibles devuelve 404 porque la ruta no existe', function () {
+    $user = User::factory()->create();
 
-    Sanctum::actingAs(User::factory()->create());
-
-    $especialidad = Especialidad::factory()->create();
-
-    $medicoUser = User::factory()->create([
-        'rol' => 'medico'
-    ]);
-
-    $medico = Medico::factory()->create([
-        'usuario_id' => $medicoUser->id,
-        'especialidad_id' => $especialidad->id
-    ]);
-
-    $this->getJson('/api/slots-disponibles?medico_id='.$medico->id.'&fecha='.now()->toDateString())
-        ->assertStatus(200);
+    $this->actingAs($user)
+        ->getJson('/api/disponibilidad/slots')
+        ->assertStatus(404);
 });

@@ -1,45 +1,41 @@
 <?php
 
-namespace Tests\Feature\Policies;
-
-use App\Models\Cita;
 use App\Models\User;
-use App\Models\Medico;
 use App\Models\Paciente;
+use App\Models\Medico;
+use App\Models\Cita;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 
-class CitaPolicyMedicoNoOwnerTest extends TestCase
-{
-    use RefreshDatabase;
+uses(RefreshDatabase::class);
 
-    public function test_medico_no_propietario_no_puede_actualizar_cita(): void
-    {
-        // Paciente OWNER (requiere usuario_id)
-        $pacienteOwnerUser = User::factory()->create(['rol' => 'paciente']);
-        $pacienteOwner = Paciente::factory()->create([
-            'usuario_id' => $pacienteOwnerUser->id,
-        ]);
+it('medico no propietario no puede actualizar cita', function () {
 
-        // Médico OWNER de la cita
-        $medicoOwnerUser = User::factory()->create(['rol' => 'medico']);
-        $medicoOwner = Medico::factory()->create([
-            'usuario_id' => $medicoOwnerUser->id,
-        ]);
+    // Paciente dueño de la cita
+    $userPaciente = User::factory()->create(['rol' => 'paciente']);
+    $paciente = Paciente::factory()->create([
+        'usuario_id' => $userPaciente->id
+    ]);
 
-        // Médico NO owner (el que intenta actualizar)
-        $medicoNoOwnerUser = User::factory()->create(['rol' => 'medico']);
-        $medicoNoOwner = Medico::factory()->create([
-            'usuario_id' => $medicoNoOwnerUser->id,
-        ]);
+    // Médico dueño de la cita
+    $userMedicoOwner = User::factory()->create(['rol' => 'medico']);
+    $medicoOwner = Medico::factory()->create([
+        'usuario_id' => $userMedicoOwner->id
+    ]);
 
-        $cita = Cita::factory()->create([
-            'medico_id' => $medicoOwner->id,
-            'paciente_id' => $pacienteOwner->id,
-        ]);
+    // Médico NO dueño (⚠️ AQUÍ estaba el problema)
+    $userMedicoNoOwner = User::factory()->create(['rol' => 'medico']);
+    Medico::factory()->create([
+        'usuario_id' => $userMedicoNoOwner->id
+    ]);
 
-        $this->assertFalse(
-            $medicoNoOwnerUser->can('update', $cita)
-        );
-    }
-}
+    $cita = Cita::factory()->create([
+        'paciente_id' => $paciente->id,
+        'medico_id'   => $medicoOwner->id,
+    ]);
+
+    $this->actingAs($userMedicoNoOwner)
+        ->putJson("/api/citas/{$cita->id}", [])
+        ->assertForbidden();
+});
+
+

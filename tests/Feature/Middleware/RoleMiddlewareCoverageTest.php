@@ -1,28 +1,33 @@
 <?php
 
 use App\Models\User;
+use App\Http\Middleware\CheckRole;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
-test('middleware check role bloquea si el rol no coincide', function () {
-
-    $user = User::factory()->create(['rol' => 'paciente']);
-    Sanctum::actingAs($user);
-
-    $response = $this->getJson('/api/users');
-
-    // El backend actualmente permite el acceso
-    $response->assertStatus(200);
+beforeEach(function () {
+    Route::middleware(['auth', CheckRole::class . ':admin'])
+        ->get('/test-role', fn () => response()->json(['ok']));
 });
 
-test('middleware check role permite si el rol coincide', function () {
+it('middleware check role bloquea si el rol no coincide', function () {
+    $user = User::factory()->create([
+        'rol' => 'paciente',
+    ]);
 
-    $user = User::factory()->create(['rol' => 'admin']);
-    Sanctum::actingAs($user);
+    $response = $this->actingAs($user)->get('/test-role');
 
-    $response = $this->getJson('/api/users');
+    $response->assertStatus(403);
+});
+
+it('middleware check role permite si el rol coincide', function () {
+    $user = User::factory()->create([
+        'rol' => 'admin',
+    ]);
+
+    $response = $this->actingAs($user)->get('/test-role');
 
     $response->assertStatus(200);
 });
