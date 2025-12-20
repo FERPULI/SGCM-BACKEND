@@ -1,4 +1,4 @@
-name: Deploy Backend to cPanel
+name: Deploy Backend with Dependencies
 
 on:
   push:
@@ -13,20 +13,30 @@ jobs:
     - name: 🚚 Get latest code
       uses: actions/checkout@v4
 
+    # PASO NUEVO: Configurar PHP en GitHub
+    - name: 🐘 Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2' # Asegúrate que coincida con tu cPanel
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, dom, fileinfo
+
+    # PASO NUEVO: Instalar las dependencias (Vendor)
+    - name: 📦 Install Composer Dependencies
+      run: composer install --no-dev --optimize-autoloader --prefer-dist
+
     - name: 📂 Sync files to Hosting
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        # Como configuramos el usuario FTP para caer directo en la carpeta, usamos ./
         server-dir: ./
         
-        # Excluir archivos sensibles o pesados
+        # IMPORTANTE: Hemos quitado 'vendor' y 'bootstrap/cache' de la lista de exclusión
         exclude: |
           **/.git*
           **/.git*/**
           **/node_modules/**
-          **/vendor/**
           .env
+          tests/**
           storage/**
