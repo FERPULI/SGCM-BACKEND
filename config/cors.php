@@ -21,7 +21,9 @@ return [
 
     'allowed_origins' => [
         // Pega la URL de tu frontend (con el puerto 3000) aquí
-        'https://anakondita.com',
+        'https://anakondita.com', // ✅ Tu dominio real
+        'https://www.anakondita.com', // Por si entran con www
+        // 'http://localhost:3000', // Puedes comentar o borrar el local
     ],
 
     'allowed_origins_patterns' => [],
